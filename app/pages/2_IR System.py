@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import faiss
 import pickle
@@ -7,13 +8,21 @@ from sentence_transformers import SentenceTransformer
 import torchvision.transforms as T
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import CLIPProcessor, CLIPModel
+
+# Đường dẫn gốc của project
+BASE_DIR = os.path.dirname(__file__)
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+
+# Hàm kiểm tra file tồn tại
+def check_file(path):
+    if not os.path.exists(path):
+        st.error(f"Không tìm thấy file: {path}")
+        st.stop()
+
 # Load model
 model = SentenceTransformer('clip-ViT-B-32')
-
-
 clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
 clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-
 
 transform = T.Compose([
     T.Resize((224, 224)),
@@ -21,14 +30,24 @@ transform = T.Compose([
     T.Normalize(mean=[0.5]*3, std=[0.5]*3)
 ])
 
-# Load dữ liệu
-index = faiss.read_index('models/faiss_index.index')
-image_vectors = np.load('models/image_vectors.npy')
+# Đường dẫn file
+index_path = os.path.join(MODELS_DIR, "faiss_index.index")
+vec_path = os.path.join(MODELS_DIR, "image_vectors.npy")
+paths_path = os.path.join(MODELS_DIR, "image_paths.pkl")
+captions_path = os.path.join(MODELS_DIR, "image_captions.pkl")
 
-with open('models/image_paths.pkl', 'rb') as f:
+# Kiểm tra file trước khi load
+for p in [index_path, vec_path, paths_path, captions_path]:
+    check_file(p)
+
+# Load dữ liệu
+index = faiss.read_index(index_path)
+image_vectors = np.load(vec_path)
+
+with open(paths_path, 'rb') as f:
     image_paths = pickle.load(f)
 
-with open('models/image_captions.pkl', 'rb') as f:
+with open(captions_path, 'rb') as f:
     image_captions = pickle.load(f)  # dict: image_path -> caption
 
 # Giao diện
