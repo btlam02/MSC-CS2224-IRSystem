@@ -30,7 +30,6 @@ def check_file(path):
 # ========================
 # Hàm load hoặc download model
 # ========================
-@st.cache_resource
 def load_or_download_model():
     if os.path.exists(LOCAL_MODEL_PATH):
         st.info(f"Đang dùng model từ thư mục local: {LOCAL_MODEL_PATH}")
@@ -43,6 +42,7 @@ def load_or_download_model():
         st.success("Tải model thành công!")
         return model
 
+# Load model
 model = load_or_download_model()
 
 # ========================
@@ -52,40 +52,20 @@ index_path = os.path.join(MODELS_DIR, "faiss_index.index")
 vec_path = os.path.join(MODELS_DIR, "image_vectors.npy")
 paths_path = os.path.join(MODELS_DIR, "image_paths.pkl")
 captions_path = os.path.join(MODELS_DIR, "image_captions.pkl")
-caption_emb_path = os.path.join(MODELS_DIR, "caption_embeddings.npy")
 
 # Kiểm tra file
 for p in [index_path, vec_path, paths_path, captions_path]:
     check_file(p)
 
-# Load FAISS index & vector
+# Load dữ liệu
 index = faiss.read_index(index_path)
 image_vectors = np.load(vec_path)
 
-# Load image paths & captions
 with open(paths_path, 'rb') as f:
     image_paths = pickle.load(f)
 
 with open(captions_path, 'rb') as f:
     image_captions = pickle.load(f)  # dict: image_path -> caption
-
-# ========================
-# Precompute caption embeddings
-# ========================
-if os.path.exists(caption_emb_path):
-    caption_embeddings = np.load(caption_emb_path)
-    st.info("Đã load caption embeddings từ file.")
-else:
-    st.info("Đang tạo caption embeddings lần đầu...")
-    captions_list = [image_captions[p] for p in image_paths]
-    caption_embeddings = model.encode(
-        captions_list,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=True
-    )
-    np.save(caption_emb_path, caption_embeddings)
-    st.success("Tạo và lưu caption embeddings thành công.")
 
 # ========================
 # Giao diện
@@ -96,11 +76,11 @@ option = st.selectbox("Chọn phương thức tìm kiếm", ["Bằng văn bản"
 top_k = st.slider("Chọn số lượng top-K", 1, 10, 5)
 
 # ========================
-# Hàm tính độ tương đồng caption (dùng embedding có sẵn)
+# Hàm tính độ tương đồng caption
 # ========================
-def compute_caption_similarity(query_caption, retrieved_indices):
+def compute_caption_similarity(query_caption, retrieved_captions):
     query_vec = model.encode([query_caption], convert_to_numpy=True, normalize_embeddings=True)
-    retrieved_vecs = caption_embeddings[retrieved_indices]
+    retrieved_vecs = model.encode(retrieved_captions, convert_to_numpy=True, normalize_embeddings=True)
     sims = cosine_similarity(query_vec, retrieved_vecs)[0]
     return sims
 
@@ -113,15 +93,16 @@ if option == "Bằng văn bản":
         query_vector = model.encode(query, convert_to_numpy=True, normalize_embeddings=True).reshape(1, -1)
         D, I = index.search(query_vector, k=top_k)
 
-        similarities = compute_caption_similarity(query, I[0])
+        top_paths = [image_paths[idx] for idx in I[0]]
+        top_captions = [image_captions.get(p, "No caption") for p in top_paths]
+        similarities = compute_caption_similarity(query, top_captions)
 
+        # Tính độ chính xác
         correct = sum(sim >= 0.7 for sim in similarities)
         acc = correct / top_k
 
-        results = [
-            (image_paths[idx], image_captions[image_paths[idx]], similarities[i], D[0][i])
-            for i, idx in enumerate(I[0])
-        ]
+        # Sắp xếp theo similarity giảm dần
+        results = list(zip(top_paths, top_captions, similarities, D[0]))
         results.sort(key=lambda x: x[2], reverse=True)
 
         st.success(f"Top@{top_k} Accuracy (similarity ≥ 0.7): {acc*100:.2f}%")
@@ -142,14 +123,16 @@ else:
         img = Image.open(uploaded).convert("RGB")
         st.image(img, caption="Truy vấn", width=300)
 
+        # Encode ảnh (SentenceTransformer hỗ trợ trực tiếp ảnh cho CLIP)
         q_vector = model.encode(img, convert_to_numpy=True, normalize_embeddings=True).reshape(1, -1)
 
         D, I = index.search(q_vector, k=top_k)
 
-        results = [
-            (image_paths[idx], image_captions[image_paths[idx]], D[0][i])
-            for i, idx in enumerate(I[0])
-        ]
+        top_paths = [image_paths[idx] for idx in I[0]]
+        top_captions = [image_captions.get(p, "No caption") for p in top_paths]
+
+        # Sắp xếp theo khoảng cách tăng dần
+        results = list(zip(top_paths, top_captions, D[0]))
         results.sort(key=lambda x: x[2])
 
         st.subheader("Kết quả:")
