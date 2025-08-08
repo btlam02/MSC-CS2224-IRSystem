@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer
 import torchvision.transforms as T
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import CLIPProcessor, CLIPModel
-
+import torch
 # Đường dẫn gốc của project
 BASE_DIR = os.path.dirname(__file__)
 MODELS_DIR = os.path.join(BASE_DIR, "models")
@@ -20,9 +20,15 @@ def check_file(path):
         st.stop()
 
 # Load model
-model = SentenceTransformer('clip-ViT-B-32')
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+LOCAL_MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "models",
+    "CLIP",
+    "snapshots",
+    "327ab6726d33c0e22f920c83f2ff9e4bd38ca37f"
+)
+
+model = SentenceTransformer(LOCAL_MODEL_PATH)
 
 transform = T.Compose([
     T.Resize((224, 224)),
