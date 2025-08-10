@@ -19,6 +19,12 @@ LOCAL_MODEL_PATH = os.path.join(MODELS_DIR, "CLIP")
 # ========================
 MODEL_NAME = "sentence-transformers/clip-ViT-B-32"
 
+
+# ========================
+# Cấu hình Hugging Face Hub
+HF_REPO = "btlam2002/coco_25k_imagesearch"
+HF_BASE_URL = f"https://huggingface.co/datasets/{HF_REPO}/resolve/main"
+
 # ========================
 # Hàm kiểm tra file tồn tại
 # ========================
@@ -61,11 +67,15 @@ for p in [index_path, vec_path, paths_path, captions_path]:
 index = faiss.read_index(index_path)
 image_vectors = np.load(vec_path)
 
+
 with open(paths_path, 'rb') as f:
     image_paths = pickle.load(f)
 
+
 with open(captions_path, 'rb') as f:
     image_captions = pickle.load(f)  # dict: image_path -> caption
+
+image_paths = [p if p.startswith("train25k/") else f"train25k/{os.path.basename(p)}" for p in image_paths]
 
 # ========================
 # Giao diện
@@ -111,7 +121,8 @@ if option == "Bằng văn bản":
         cols = st.columns(3)
         for i, (path, caption, sim, dist) in enumerate(results):
             with cols[i % 3]:
-                st.image(path, use_column_width=True)
+                hf_url = f"{HF_BASE_URL}/{path}"
+                st.image(hf_url, use_column_width=True)
                 st.caption(f"Rank #{i+1}")
                 st.caption(f"Caption: {caption}")
                 st.caption(f"Similarity: {sim:.2f}")
@@ -139,7 +150,8 @@ else:
         cols = st.columns(3)
         for i, (path, caption, dist) in enumerate(results):
             with cols[i % 3]:
-                st.image(path, use_column_width=True)
+                hf_url = f"{HF_BASE_URL}/{path}"
+                st.image(hf_url, use_column_width=True)
                 st.caption(f"Rank #{i+1}")
                 st.caption(f"Caption: {caption}")
                 st.caption(f"Distance: {dist:.4f}")
