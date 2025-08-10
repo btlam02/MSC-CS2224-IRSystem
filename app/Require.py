@@ -1,8 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hello",
-    page_icon="👋",
+    page_title="240101052",
 )
 
 st.write("# Yêu cầu đồ án")
